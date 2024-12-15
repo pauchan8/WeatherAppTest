@@ -8,12 +8,13 @@
 import Foundation
 import Combine
 
+@MainActor
 class HomeViewModel: ObservableObject {
     
     private let weatherService: NetworkService
     private let persistenceService: PersistenceService
     
-    @Published private(set) var searchQuery: String = ""
+    @Published var searchQuery: String = ""
     @Published private(set) var state: State
     private(set) var currentWeather: WeatherObject?
     
@@ -72,6 +73,8 @@ class HomeViewModel: ObservableObject {
         $searchQuery
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
             .removeDuplicates()
+            .dropFirst()
+            .receive(on: RunLoop.main)
             .sink { [weak self] query in
                 self?.searchWeather(query)
             }

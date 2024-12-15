@@ -15,14 +15,20 @@ struct HomeView: View {
     }
     
     var body: some View {
-        switch viewModel.state {
-        case .locationNotStored:
-            Text("No City Selected")
-                .font(FontProvider.medium(size: 30))
-            Text("Please Search For A City")
-                .font(FontProvider.medium(size: 15))
-        default:
-            Text("Default")
+        VStack {
+            SearchView(text: $viewModel.searchQuery, prompt: "Search Location")
+                .padding([.leading, .trailing], 24)
+                .padding(.top, 14)
+            switch viewModel.state {
+            case .locationNotStored:
+                Text("No City Selected")
+                    .font(FontProvider.medium(size: 30))
+                Text("Please Search For A City")
+                    .font(FontProvider.medium(size: 15))
+            default:
+                Text("Default")
+            }
+            Spacer()
         }
     }
 }

@@ -8,5 +8,5 @@
 // Configuration settings file format documentation can be found at:
 // https://help.apple.com/xcode/#/dev745c5c974
 
-WeatherURL = http://api.weatherapi.com/v1
+WeatherURL = api.weatherapi.com/v1
 WeatherAPIKey = a83eb39741d044629b9153026241512

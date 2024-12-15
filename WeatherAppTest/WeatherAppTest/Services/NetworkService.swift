@@ -46,7 +46,7 @@ class NetworkServiceBase: NetworkService {
     }
     
     func fetchWeather(location: String) async throws(NetworkError) -> WeatherObject {
-        var fetchComponents = URLComponents(url: baseUrl.appending(component: "current.json"), resolvingAgainstBaseURL: true)
+        var fetchComponents = URLComponents(url: baseUrl.appending(path: "current.json"), resolvingAgainstBaseURL: true)
         fetchComponents?.queryItems = [
             URLQueryItem(name: "key", value: apiKey),
             URLQueryItem(name: "q", value: location),

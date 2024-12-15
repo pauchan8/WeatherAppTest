@@ -11,6 +11,6 @@
 	<key>WeatherAPIKey</key>
 	<string>$(WeatherAPIKey)</string>
 	<key>WeatherURL</key>
-	<string>$(WeatherURL)</string>
+	<string>https://$(WeatherURL)</string>
 </dict>
 </plist>
