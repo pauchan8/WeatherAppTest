@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum NetworkError: Error {
+enum NetworkError: Error, Equatable {
     case invalidURL
     case invalidResponse
     case invalidData(String)
@@ -30,7 +30,9 @@ enum NetworkError: Error {
 }
 
 protocol NetworkService {
-    func fetchWeather(location: String) async throws(NetworkError) -> WeatherObject
+    func fetchWeather(with location: LocationObject) async throws -> AggregatedWeatherObject
+    func searchLocations(query: String) async throws -> [LocationObject]
+    func batchLocations(locations: [LocationObject]) async throws -> [AggregatedWeatherObject]
 }
 
 class NetworkServiceBase: NetworkService {
@@ -45,33 +47,72 @@ class NetworkServiceBase: NetworkService {
         self.session = session
     }
     
-    func fetchWeather(location: String) async throws(NetworkError) -> WeatherObject {
-        var fetchComponents = URLComponents(url: baseUrl.appending(path: "current.json"), resolvingAgainstBaseURL: true)
+    func searchLocations(query: String) async throws -> [LocationObject] {
+        let fetchURL = try url(for: "search.json", query: query)
+        let responseTuple = try await response(for: fetchURL)
+        return try handleResponse(data: responseTuple.0, response: responseTuple.1)
+    }
+    
+    func batchLocations(locations: [LocationObject]) async throws -> [AggregatedWeatherObject] {
+        return try await withThrowingTaskGroup(of: AggregatedWeatherObject.self) { group in
+            locations.forEach { location in
+                group.addTask {
+                    try await self.fetchWeather(with: location)
+                }
+            }
+            
+            var results: [AggregatedWeatherObject] = []
+            for try await object in group {
+                results.append(object)
+            }
+            return results
+        }
+    }
+    
+    func fetchWeather(with location: LocationObject) async throws -> AggregatedWeatherObject {
+        let fetchURL = try url(for: "current.json", query: "id:\(location.id)")
+        let responseTuple = try await response(for: fetchURL)
+        let weather: WeatherObject = try handleResponse(data: responseTuple.0, response: responseTuple.1)
+        return AggregatedWeatherObject(weatherObject: weather, locationObject: location)
+    }
+    
+    // MARK: - Helpers
+    
+    private func url(for path: String, query: String) throws -> URL {
+        var fetchComponents = URLComponents(url: baseUrl.appending(path: path), resolvingAgainstBaseURL: true)
         fetchComponents?.queryItems = [
             URLQueryItem(name: "key", value: apiKey),
-            URLQueryItem(name: "q", value: location),
+            URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "aqi", value: "no")
         ]
         
-        guard let fetchURL = fetchComponents?.url else { throw .invalidURL }
-        let responseTuple: (Data, URLResponse)
+        if let fetchURL = fetchComponents?.url {
+            return fetchURL
+        } else {
+            throw NetworkError.invalidURL
+        }
+    }
+    
+    private func response(for url: URL) async throws -> (Data, URLResponse) {
         do {
-            responseTuple = try await URLSession.shared.data(from: fetchURL)
+            return try await URLSession.shared.data(from: url)
         } catch {
-            throw .invalidData(error.localizedDescription)
+            throw NetworkError.invalidData(error.localizedDescription)
         }
-        
-        guard let response = responseTuple.1 as? HTTPURLResponse, response.statusCode == 200 else {
-            let decodedError = try? JSONDecoder().decode(WeatherError.self, from: responseTuple.0)
+    }
+    
+    private func handleResponse<T: Decodable>(data: Data, response: URLResponse) throws -> T {
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
+            let decodedError = try? JSONDecoder().decode(WeatherError.self, from: data)
             let error = decodedError.flatMap { NetworkError(weatherError: $0) }
-            throw error ?? .invalidResponse
+            throw error ?? NetworkError.invalidResponse
         }
-        
+
         do {
-            let object = try JSONDecoder().decode(WeatherObject.self, from: responseTuple.0)
+            let object = try JSONDecoder().decode(T.self, from: data)
             return object
         } catch {
-            throw .invalidData(error.localizedDescription)
+            throw NetworkError.invalidData(error.localizedDescription)
         }
     }
 }

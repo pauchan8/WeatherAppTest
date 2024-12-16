@@ -8,8 +8,8 @@
 import Foundation
 
 protocol PersistenceService {
-    func latestObject() -> WeatherObject?
-    func storeWeather(_ weather: WeatherObject) -> Bool
+    func latestObject() -> AggregatedWeatherObject?
+    func storeWeather(_ weather: AggregatedWeatherObject) -> Bool
     func removeLatestObject()
 }
 
@@ -21,15 +21,15 @@ struct PersistenceServiceBase: PersistenceService {
         self.userDefaults = userDefaults
     }
     
-    func latestObject() -> WeatherObject? {
+    func latestObject() -> AggregatedWeatherObject? {
         if let weatherData = userDefaults.data(forKey: latestKey) {
             let decoder = JSONDecoder()
-            return try? decoder.decode(WeatherObject.self, from: weatherData)
+            return try? decoder.decode(AggregatedWeatherObject.self, from: weatherData)
         }
         return nil
     }
     
-    func storeWeather(_ weather: WeatherObject) -> Bool {
+    func storeWeather(_ weather: AggregatedWeatherObject) -> Bool {
         let encoder = JSONEncoder()
         if let encoded = try? encoder.encode(weather) {
             userDefaults.set(encoded, forKey: latestKey)

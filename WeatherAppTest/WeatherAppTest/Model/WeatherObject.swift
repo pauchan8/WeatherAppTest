@@ -7,15 +7,32 @@
 
 import Foundation
 
-struct WeatherObject: Codable {
-    
+struct WeatherObject: Codable, Equatable {
+        
     let locationName: String
     let teperatureCelsius: Double
     let feelsLikeCelsius: Double
     let humidity: Double
     let uv: Double
     let icon: String?
-        
+    let id = UUID()
+    
+    var iconURL: URL? {
+        if let substring = icon?.replacingOccurrences(of: "//", with: "") {
+            return URL(string: String("http://" + substring))
+        }
+        return nil
+    }
+    
+    init (locationName: String, temperatureCelsius: Double, feelsLikeCelsius: Double, humidity: Double, uv: Double, icon: String?) {
+        self.locationName = locationName
+        self.teperatureCelsius = temperatureCelsius
+        self.feelsLikeCelsius = feelsLikeCelsius
+        self.humidity = humidity
+        self.uv = uv
+        self.icon = icon
+    }
+
     init(from decoder: any Decoder) throws {
         
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -70,20 +87,17 @@ private extension WeatherObject {
         }
 
     }
-    
-//    enum LocationKeys: String, CodingKey {
-//        case name
-//    }
-//    
-//    enum CurrentKeys: String, CodingKey {
-//        case teperatureCelsius = "temp_c"
-//        case feelsLikeCelsius = "feelslike_c"
-//        case humidity
-//        case uv
-//        case condition
-//    }
-//    
-//    enum ConditionKeys: String, CodingKey {
-//        case icon
-//    }
+}
+
+extension WeatherObject {
+    static func sampleObject() -> Self {
+        .init(
+            locationName: "London",
+            temperatureCelsius: 28.0,
+            feelsLikeCelsius: 29.0,
+            humidity: 80.0,
+            uv: 10.0,
+            icon: "//cdn.weatherapi.com/weather/64x64/day/338.png"
+        )
+    }
 }
