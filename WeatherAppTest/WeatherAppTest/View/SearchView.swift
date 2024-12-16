@@ -11,7 +11,6 @@ import Combine
 struct SearchView: View {
     @Binding var text: String
     var prompt: String = ""
-    var onTextFieldSubmit: PassthroughSubject<Void, Never> = PassthroughSubject()
     
     var body: some View {
         ZStack {
@@ -22,9 +21,6 @@ struct SearchView: View {
                 TextField(prompt, text: $text)
                     .font(.poppins(.regular, size: 15))
                     .padding(.leading, 20)
-                    .onSubmit {
-                        onTextFieldSubmit.send()
-                    }
                 Spacer()
                 Image("search")
                     .frame(width: 17, height: 17)

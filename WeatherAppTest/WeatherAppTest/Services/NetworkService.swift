@@ -9,11 +9,12 @@ import Foundation
 
 enum NetworkError: Error, Equatable {
     case invalidURL
-    case invalidResponse
+    case invalidResponse(String)
     case invalidData(String)
     case noLocationMatching
     case apiKeyError(String)
     case internalError(String)
+    case cancelled
     
     init?(weatherError: WeatherError) {
         switch weatherError.code {
@@ -22,7 +23,7 @@ enum NetworkError: Error, Equatable {
         case 9999:
             self = .internalError("Server issues: " + weatherError.message)
         case 2006...2009:
-            self = .apiKeyError("API key error: " + weatherError.message)
+            self = .apiKeyError("Server description: " + weatherError.message)
         default:
             return nil
         }
@@ -30,9 +31,9 @@ enum NetworkError: Error, Equatable {
 }
 
 protocol NetworkService {
-    func fetchWeather(with location: LocationObject) async throws -> AggregatedWeatherObject
+    func fetchWeather(with id: Int) async throws -> WeatherObject
     func searchLocations(query: String) async throws -> [LocationObject]
-    func batchLocations(locations: [LocationObject]) async throws -> [AggregatedWeatherObject]
+    func batchWeatherObjects(ids: [Int]) async throws -> [WeatherObject]
 }
 
 class NetworkServiceBase: NetworkService {
@@ -53,15 +54,15 @@ class NetworkServiceBase: NetworkService {
         return try handleResponse(data: responseTuple.0, response: responseTuple.1)
     }
     
-    func batchLocations(locations: [LocationObject]) async throws -> [AggregatedWeatherObject] {
-        return try await withThrowingTaskGroup(of: AggregatedWeatherObject.self) { group in
-            locations.forEach { location in
+    func batchWeatherObjects(ids: [Int]) async throws -> [WeatherObject] {
+        return try await withThrowingTaskGroup(of: WeatherObject.self) { group in
+            ids.forEach { id in
                 group.addTask {
-                    try await self.fetchWeather(with: location)
+                    try await self.fetchWeather(with: id)
                 }
             }
             
-            var results: [AggregatedWeatherObject] = []
+            var results: [WeatherObject] = []
             for try await object in group {
                 results.append(object)
             }
@@ -69,11 +70,10 @@ class NetworkServiceBase: NetworkService {
         }
     }
     
-    func fetchWeather(with location: LocationObject) async throws -> AggregatedWeatherObject {
-        let fetchURL = try url(for: "current.json", query: "id:\(location.id)")
+    func fetchWeather(with id: Int) async throws -> WeatherObject {
+        let fetchURL = try url(for: "current.json", query: "id:\(id)")
         let responseTuple = try await response(for: fetchURL)
-        let weather: WeatherObject = try handleResponse(data: responseTuple.0, response: responseTuple.1)
-        return AggregatedWeatherObject(weatherObject: weather, locationObject: location)
+        return try handleResponse(data: responseTuple.0, response: responseTuple.1)
     }
     
     // MARK: - Helpers
@@ -97,7 +97,11 @@ class NetworkServiceBase: NetworkService {
         do {
             return try await URLSession.shared.data(from: url)
         } catch {
-            throw NetworkError.invalidData(error.localizedDescription)
+            if (error as NSError).code == -999 {
+                throw NetworkError.cancelled
+            } else {
+                throw NetworkError.invalidResponse(error.localizedDescription)
+            }
         }
     }
     
@@ -105,7 +109,7 @@ class NetworkServiceBase: NetworkService {
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
             let decodedError = try? JSONDecoder().decode(WeatherError.self, from: data)
             let error = decodedError.flatMap { NetworkError(weatherError: $0) }
-            throw error ?? NetworkError.invalidResponse
+            throw error ?? NetworkError.invalidResponse("Could not decode response error.")
         }
 
         do {

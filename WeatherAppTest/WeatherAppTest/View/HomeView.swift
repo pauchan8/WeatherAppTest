@@ -17,11 +17,9 @@ struct HomeView: View {
     }
     
     var body: some View {
-        let searchView = SearchView(text: $viewModel.searchQuery, prompt: "Search Location")
-
         GeometryReader { geometry in
             VStack {
-                searchView
+                SearchView(text: $viewModel.searchQuery, prompt: "Search Location")
                     .padding([.leading, .trailing], 24)
                     .padding(.top, 14)
                     .focused($keyboardShown)
@@ -30,6 +28,7 @@ struct HomeView: View {
                             viewModel.handleHideKeyboard()
                         }
                     }
+                
                 ZStack {
                     ScrollView {
                         VStack {
@@ -49,23 +48,26 @@ struct HomeView: View {
                                         .padding(.bottom, 16)
                                         .onTapGesture {
                                             viewModel.weatherObjectSelected(result)
+                                            keyboardShown = false
                                         }
                                 }
                                 .padding([.leading, .trailing], 20)
-                            case .error(let error):
-                                Text(error.localizedDescription)
+                            case .error(let title, let description):
+                                Spacer()
+                                    .frame(height: geometry.size.height * 0.1)
+                                ErrorView(title: title, description: description)
+                                    .padding([.leading, .trailing], 48)
                             case .storedWeather(let object):
                                 CurrentWeatherView(aggregatedWeatherObject: object)
                                     .padding(.top, 50)
                             }
-                            Spacer()
                         }
                         .blur(radius: viewModel.isLoading ? 4 : 0)
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .controlSize(.large)
-                        }
+                    }
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .controlSize(.large)
                     }
                 }
             }

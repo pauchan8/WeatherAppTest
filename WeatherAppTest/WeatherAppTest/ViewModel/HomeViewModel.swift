@@ -17,7 +17,8 @@ class HomeViewModel: ObservableObject {
     
     @Published var searchQuery: String = ""
     @Published private(set) var state: State
-    @Published private(set) var isLoading = false
+    @Published private(set) var isLoading: Bool = false
+    private var didClearSearchQueueManually: Bool = false
     
     private var currentTask: Task<(), Never>?
     private var cancellables: Set<AnyCancellable> = []
@@ -42,15 +43,16 @@ class HomeViewModel: ObservableObject {
     }
     
     func weatherObjectSelected(_ weatherObject: AggregatedWeatherObject) {
+        didClearSearchQueueManually = true
+        searchQuery = ""
         if persistenceService.storeWeather(weatherObject) {
             state = .storedWeather(weatherObject)
         }
-        // TODO: add error handling with snack bar?
     }
     
     func handleHideKeyboard() {
-        if searchQuery == "" {
-            setUpInitialState()
+        if searchQuery.isEmpty {
+            setUpStoredStateIfPossible()
         }
     }
     
@@ -66,9 +68,17 @@ class HomeViewModel: ObservableObject {
         }
     }
     
+    private func setUpStoredStateIfPossible() {
+        if let object = persistenceService.latestObject() {
+            state = .storedWeather(object)
+        } else {
+            state = .weatherNotStored
+        }
+    }
+    
     private func search(_ query: String) {
         guard !query.isEmpty else {
-            state = .searchResults([])
+            setUpStoredStateIfPossible()
             return
         }
         
@@ -76,13 +86,23 @@ class HomeViewModel: ObservableObject {
         currentTask?.cancel()
         currentTask = Task {
             do {
+                defer { isLoading = false }
                 let locations = try await weatherService.searchLocations(query: query)
-                let objects = try await weatherService.batchLocations(locations: locations)
-                let results = objects.sorted(by: { $0.weatherObject.locationName < $1.weatherObject.locationName })
+                let objects = try await weatherService.batchWeatherObjects(ids: locations.map(\.id))
+                var results = [AggregatedWeatherObject]()
+                for location in locations {
+                    let first = objects.first(where: { $0.locationName == location.name
+                        && $0.region == location.region
+                        && $0.country == location.country
+                    })
+                    if let first {
+                        results.append(AggregatedWeatherObject(weatherObject: first, locationObject: location))
+                    }
+                }
+                results.sort(by: { $0.weatherObject.locationName < $1.weatherObject.locationName })
                 state = .searchResults(results)
-                isLoading = false
             } catch {
-                setErrorState(error)
+                setErrorStateIfNeeded(error)
             }
         }
     }
@@ -91,32 +111,58 @@ class HomeViewModel: ObservableObject {
         currentTask?.cancel()
         currentTask = Task {
             do {
-                let object = try await weatherService.fetchWeather(with: location)
-                state = .storedWeather(object)
+                let object = try await weatherService.fetchWeather(with: location.id)
+                let aggregatedObject = AggregatedWeatherObject(weatherObject: object, locationObject: location)
+                state = .storedWeather(aggregatedObject)
                 isLoading = false
             } catch {
-                setErrorState(error)
+                setErrorStateIfNeeded(error)
             }
         }
     }
     
-    private func setErrorState(_ error: Error) {
+    // I've added technical discriptions to errors for simplicity of showing that errors are handled. Of course, in a real life app
+    // something like "API key error" should be treated to something more user-friendly.
+    private func setErrorStateIfNeeded(_ error: Error) {
         isLoading = false
         if let error = error as? NetworkError {
-            state = .error(error)
+            switch error {
+            case .noLocationMatching:
+                state = .error(title: "Not found", description: "No location matching query found.")
+            case .apiKeyError(let descr):
+                state = .error(title: "API key error", description: descr)
+            case .internalError(let descr):
+                state = .error(title: "Internal error", description: descr)
+            case .invalidData(let descr):
+                state = .error(title: "Invalid data", description: "Could not parse data. Description: \(descr).")
+            case .invalidResponse(let descr):
+                state = .error(title: "Invalid response", description: "Received incorrect response. Description: \(descr).")
+            case .invalidURL:
+                state = .error(title: "Invalid URL", description: "Could not build URL.")
+            case .cancelled:
+                isLoading = true
+                break
+            }
+        } else if error is CancellationError {
+            isLoading = true
+            return
         } else {
-            state = .error(.internalError("Could not parse error"))
+            state = .error(title: "Internal error", description: "Could not parse error.")
         }
     }
     
     private func bind() {
         $searchQuery
             .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
-            .removeDuplicates()
             .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] query in
-                self?.search(query)
+                let didClearSearchQueueManually = self?.didClearSearchQueueManually ?? false
+                if !didClearSearchQueueManually {
+                    self?.search(query)
+                } else {
+                    self?.didClearSearchQueueManually = false
+                }
             }
             .store(in: &cancellables)
     }
@@ -128,6 +174,6 @@ extension HomeViewModel {
         case weatherNotStored
         case searchResults([AggregatedWeatherObject])
         case storedWeather(AggregatedWeatherObject)
-        case error(NetworkError)
+        case error(title: String, description: String)
     }
 }

@@ -21,7 +21,7 @@ struct SearchResultView: View {
                         .font(.poppins(.semiBold, size: 20))
                         .foregroundStyle(.nero)
                         .frame(height: 25)
-                    HStack(spacing: 2) {
+                    HStack(spacing: 0) {
                         Text(aggregatedWeatherObject.teperatureCelsius.trimmedFractionDigits)
                             .font(.poppins(.medium, size: 60))
                             .foregroundStyle(.nero)
@@ -32,6 +32,7 @@ struct SearchResultView: View {
                             Spacer()
                         }
                     }
+                    .padding(.leading, 5)
                     .frame(height: 50)
                 }
                 .padding(.leading, 31)

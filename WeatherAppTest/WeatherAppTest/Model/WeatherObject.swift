@@ -10,6 +10,8 @@ import Foundation
 struct WeatherObject: Codable, Equatable {
         
     let locationName: String
+    let region: String
+    let country: String
     let teperatureCelsius: Double
     let feelsLikeCelsius: Double
     let humidity: Double
@@ -24,8 +26,19 @@ struct WeatherObject: Codable, Equatable {
         return nil
     }
     
-    init (locationName: String, temperatureCelsius: Double, feelsLikeCelsius: Double, humidity: Double, uv: Double, icon: String?) {
+    init(
+        locationName: String,
+        country: String,
+        region: String,
+        temperatureCelsius: Double,
+        feelsLikeCelsius: Double,
+        humidity: Double,
+        uv: Double,
+        icon: String?
+    ) {
         self.locationName = locationName
+        self.country = country
+        self.region = region
         self.teperatureCelsius = temperatureCelsius
         self.feelsLikeCelsius = feelsLikeCelsius
         self.humidity = humidity
@@ -39,7 +52,9 @@ struct WeatherObject: Codable, Equatable {
         
         let locationContainer = try container.nestedContainer(keyedBy: CodingKeys.LocationKeys.self, forKey: .location)
         self.locationName = try locationContainer.decode(String.self, forKey: .name)
-
+        self.region = try locationContainer.decode(String.self, forKey: .region)
+        self.country = try locationContainer.decode(String.self, forKey: .country)
+        
         let currentContainer = try container.nestedContainer(keyedBy: CodingKeys.CurrentKeys.self, forKey: .current)
         self.teperatureCelsius = try currentContainer.decode(Double.self, forKey: .teperatureCelsius)
         self.feelsLikeCelsius = try currentContainer.decode(Double.self, forKey: .feelsLikeCelsius)
@@ -54,7 +69,9 @@ struct WeatherObject: Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         var locationContainer = container.nestedContainer(keyedBy: CodingKeys.LocationKeys.self, forKey: .location)
         try locationContainer.encode(locationName, forKey: .name)
-        
+        try locationContainer.encode(country, forKey: .country)
+        try locationContainer.encode(region, forKey: .region)
+
         var currentContainer = container.nestedContainer(keyedBy: CodingKeys.CurrentKeys.self, forKey: .current)
         try currentContainer.encode(teperatureCelsius, forKey: .teperatureCelsius)
         try currentContainer.encode(feelsLikeCelsius, forKey: .feelsLikeCelsius)
@@ -71,7 +88,7 @@ private extension WeatherObject {
         case location, current
         
         enum LocationKeys: String, CodingKey {
-            case name
+            case name, region, country
         }
 
         enum CurrentKeys: String, CodingKey {
@@ -93,6 +110,8 @@ extension WeatherObject {
     static func sampleObject() -> Self {
         .init(
             locationName: "London",
+            country: "United Kingdom",
+            region: "City of London, Greater London",
             temperatureCelsius: 28.0,
             feelsLikeCelsius: 29.0,
             humidity: 80.0,
